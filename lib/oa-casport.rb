@@ -1,7 +1,10 @@
-require "oa-casport/version"
+$:.push File.expand_path('lib', __FILE__)
 
-module Oa
-  module Casport
-    # Your code goes here...
+require "oa-casport/version"
+require 'omniauth/core'
+
+module OmniAuth
+  module Strategies
+    autoload :Casport, 'omniauth/strategies/casport'
   end
 end

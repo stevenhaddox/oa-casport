@@ -4,13 +4,12 @@ require "oa-casport/version"
 
 Gem::Specification.new do |s|
   s.name        = "oa-casport"
-  s.version     = Oa::Casport::VERSION
+  s.version     = OmniAuth::Casport::VERSION
   s.authors     = ["Steven Haddox"]
   s.email       = ["steven@haddox.us"]
   s.homepage    = ""
-  s.summary     = %q{TODO: Write a gem summary}
-  s.description = %q{TODO: Write a gem description}
-
+  s.summary     = %q{OmniAuth gem for internal casport server}
+  s.description = %q{ Simple gem to enable rack powered Ruby apps to authenticate internally via CASPORT with ease}
   s.rubyforge_project = "oa-casport"
 
   s.files         = `git ls-files`.split("\n")
