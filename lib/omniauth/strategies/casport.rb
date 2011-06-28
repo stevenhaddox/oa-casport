@@ -12,8 +12,6 @@ module OmniAuth
     #
     #  use OmniAuth::Strategies::Casport, {
     #        :setup       => true, 
-    #        :ssl_ca_file => 'path/to/ca_file.crt', 
-    #        :pem_cert    => '/path/to/cert.pem'
     #      }
     # @example Full Options Usage
     #
@@ -34,11 +32,9 @@ module OmniAuth
       def initialize(app, options)
         super(app, :casport)
         @options = options
-        @options[:cas_server]    ||= 'https://cas.dev/users/'
-        @options[:ssl_ca_file]   ||= '/etc/pki/tls/certs/ca_cert.crt'
+        @options[:cas_server]    ||= 'http://cas.dev/users/'
         @options[:format]        ||= 'xml'
         @options[:format_header] ||= 'application/xml'
-        raise "oa-casport requires a PEM Cert!" unless @options[:pem_cert]
       end
 
       def request_phase
@@ -93,11 +89,13 @@ module OmniAuth
       def self.setup_httparty(opts)
         format opts[:format].to_sym
         headers 'Accept' => opts[:format_header]
-        ssl_ca_file opts[:ssl_ca_file]
-        unless opts[:pem_cert_pass].nil?
-          pem File.read(opts[:pem_cert]), opts[:pem_cert_pass]
-        else
-          pem File.read(opts[:pem_cert]
+        if opts[:ssl_ca_file]
+          ssl_ca_file opts[:ssl_ca_file]
+          unless opts[:pem_cert_pass].nil?
+            pem File.read(opts[:pem_cert]), opts[:pem_cert_pass]
+          else
+            pem File.read(opts[:pem_cert]
+          end
         end
       end
     
