@@ -41,7 +41,7 @@ module OmniAuth
         # Can't get user data without their UID for the CASPORT server 
         raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
         Casport.setup_httparty(@options)
-        url = URI.escape(@options[:cas_server] + @options[:uid]) 
+        url = URI.escape(@options[:cas_server] + @options[:uid])
         begin 
           cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
           unless @user = (cache.get @options[:uid])
