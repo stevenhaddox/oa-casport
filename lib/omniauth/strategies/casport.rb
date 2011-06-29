@@ -94,7 +94,7 @@ module OmniAuth
           unless opts[:pem_cert_pass].nil?
             pem File.read(opts[:pem_cert]), opts[:pem_cert_pass]
           else
-            pem File.read(opts[:pem_cert]
+            pem File.read(opts[:pem_cert])
           end
         end
       end
