@@ -41,7 +41,7 @@ module OmniAuth
         # Can't get user data without their UID for the CASPORT server 
 #        raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
         Casport.setup_httparty(@options)
-        url = URI.escape(@options[:cas_server] + @options[:uid])
+        url = URI.escape(@options[:cas_server] + @options[:uid].to_s)
         redirect(callback_path)
       end
     
@@ -57,7 +57,7 @@ module OmniAuth
       end
 
       def auth_hash
-        user_obj = user # store user in local var to prevent multiple method queries
+        user_obj = user['hash'] # store user in local var to prevent multiple method queries
         OmniAuth::Utils.deep_merge(super, {
           'uid'       => user_obj['userinfo']['uid'],
           'user_info' => {
@@ -93,27 +93,27 @@ module OmniAuth
         begin
           raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
         rescue => e
-          fail!(:uid_no_found, e)
+          fail!(:uid_not_found, e)
         end
         
-        url = URI.escape(@options[:cas_server] + @options[:uid])
+        url = URI.escape(@options[:cas_server] + @options[:uid].to_s)
         begin
           cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
-          unless @user = (cache.get @options[:uid])
+          unless @user = (cache.get @options[:uid].to_s)
             # User is not in the cache
             # Retrieving the user data from CASPORT
             # {'userinfo' => {{'uid' => UID}, {'fullName' => NAME},...}},
             @user = Casport.get(url).parsed_response
-            cache.set @options[:uid], @user
+            cache.set @options[:uid].to_s, @user
             # CASPORT expiration time for user (24 hours => 1440 seconds)
-            cache.expire @options[:uid], 1440
+            cache.expire @options[:uid].to_s, 1440
           end
         # If we can't connect to Redis...
         rescue Errno::ECONNREFUSED => e
           @user ||= Casport.get(url).parsed_response
         end
         @user = nil if empty_user?(@user)
-        @user
+        return eval(@user) unless @user.nil?
       end
 
       # Investigate user_obj to see if it's empty (or anti-pattern data)
@@ -121,20 +121,12 @@ module OmniAuth
         is_empty = false
         is_empty = true if user_obj.nil?
         is_empty = true if user_obj.empty?
-        begin
-          if user_obj.class.to_s == String.to_s
-            is_empty = true
-            raise "We expected data back, not a string."
+        if user_obj.class == String
+          case user_obj.to_s
+            when "User has not been authenticated! Verify you are using 2-way SSL."
+              is_empty = true
           end
-        rescue => e
-          fail!(user_obj.to_s.to_sym, e)
         end
-#        if user_obj.class.to_s == String.to_s
-#          case user_obj.to_s
-#            when "User has not been authenticated! Verify you are using 2-way SSL."
-#              is_empty = true
-#          end
-#        end
         is_empty == true ? true : nil
       end
     end
