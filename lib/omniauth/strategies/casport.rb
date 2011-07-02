@@ -39,44 +39,33 @@ module OmniAuth
 
       def request_phase
         # Can't get user data without their UID for the CASPORT server 
-        raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
+#        raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
         Casport.setup_httparty(@options)
         url = URI.escape(@options[:cas_server] + @options[:uid])
-        begin 
-          cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
-          unless @user = (cache.get @options[:uid])
-            # User is not cached
-            # Retrieving the user data from CASPORT
-            # {"userinfo" => {{"dn"=>DN, {fullName=>NAME},...}},
-            @user = Casport.get(url).parsed_response
-            cache.set @options[:uid], @user
-            # CASPORT expiration time for a user (24 hrs. => 1440 seconds)
-            cache.expire @options[:uid], 1440
-          end
-
-        # If we can't connect to Redis...
-        rescue Errno::ECONNREFUSED => e
-          @user = Casport.get(url).parsed_response
-        end
-        @user = nil if @user && @user.empty? # sanity check to ensure we have a user, not just empty data
+        redirect(callback_path)
       end
     
       def callback_phase
         begin
+          raise 'We seemed to have misplaced your credentials... O_o' if user.nil?
           super
         rescue => e
-          fail!(:invalid_credentials, e)
+          redirect(request_path)
+#          fail!(:invalid_credentials, e)
         end
+        call_app!
       end
 
       def auth_hash
-        if @user
-          OmniAuth::Utils.deep_merge(super, {
-            'uid'       => @user[userinfo][uid],
-            'user_info' => {"name" => @user[userinfo][fullName]},
-            'extra'     => @user
-          })
-        end
+        user_obj = user # store user in local var to prevent multiple method queries
+        OmniAuth::Utils.deep_merge(super, {
+          'uid'       => user_obj['userinfo']['uid'],
+          'user_info' => {
+                          'name' => user_obj['userinfo']['fullName'],
+                          'email' => user_obj['userinfo']['email']
+                         },
+          'extra'     => user_obj
+        })
       end
 
       # Set HTTParty params that we need to set after initialize is called
@@ -91,14 +80,63 @@ module OmniAuth
         headers 'Accept' => opts[:format_header]
         if opts[:ssl_ca_file]
           ssl_ca_file opts[:ssl_ca_file]
-          unless opts[:pem_cert_pass].nil?
+          if opts[:pem_cert_pass]
             pem File.read(opts[:pem_cert]), opts[:pem_cert_pass]
           else
             pem File.read(opts[:pem_cert])
           end
         end
       end
-    
+      
+      def user
+        # Can't get user data without a UID from the application
+        begin
+          raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
+        rescue => e
+          fail!(:uid_no_found, e)
+        end
+        
+        url = URI.escape(@options[:cas_server] + @options[:uid])
+        begin
+          cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
+          unless @user = (cache.get @options[:uid])
+            # User is not in the cache
+            # Retrieving the user data from CASPORT
+            # {'userinfo' => {{'uid' => UID}, {'fullName' => NAME},...}},
+            @user = Casport.get(url).parsed_response
+            cache.set @options[:uid], @user
+            # CASPORT expiration time for user (24 hours => 1440 seconds)
+            cache.expire @options[:uid], 1440
+          end
+        # If we can't connect to Redis...
+        rescue Errno::ECONNREFUSED => e
+          @user ||= Casport.get(url).parsed_response
+        end
+        @user = nil if empty_user?(@user)
+        @user
+      end
+
+      # Investigate user_obj to see if it's empty (or anti-pattern data)
+      def empty_user?(user_obj)
+        is_empty = false
+        is_empty = true if user_obj.nil?
+        is_empty = true if user_obj.empty?
+        begin
+          if user_obj.class.to_s == String.to_s
+            is_empty = true
+            raise "We expected data back, not a string."
+          end
+        rescue => e
+          fail!(user_obj.to_s.to_sym, e)
+        end
+#        if user_obj.class.to_s == String.to_s
+#          case user_obj.to_s
+#            when "User has not been authenticated! Verify you are using 2-way SSL."
+#              is_empty = true
+#          end
+#        end
+        is_empty == true ? true : nil
+      end
     end
 
   end
