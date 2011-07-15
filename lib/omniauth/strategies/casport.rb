@@ -58,6 +58,7 @@ module OmniAuth
 
       def auth_hash
         user_obj = user['hash'] # store user in local var to prevent multiple method queries
+ap user_obj
         OmniAuth::Utils.deep_merge(super, {
           'uid'       => user_obj['userinfo']['uid'],
           'user_info' => {
