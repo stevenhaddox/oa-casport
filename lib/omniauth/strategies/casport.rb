@@ -32,7 +32,7 @@ module OmniAuth
       def initialize(app, options)
         super(app, :casport)
         @options = options
-        @options[:cas_server]    ||= 'http://cas.dev/users/'
+        @options[:cas_server]    ||= 'http://cas.dev/users'
         @options[:format]        ||= 'xml'
         @options[:format_header] ||= 'application/xml'
       end
@@ -63,10 +63,13 @@ module OmniAuth
         # store user in a local var to avoid new method calls for each attribute
         # convert all Java camelCase keys to Ruby snake_case, it just feels right!
 ap 'in auth_hash...'
-ap @options
 ap user
-ap eval(user)
-        user_obj = user['userinfo'].inject({}){|memo, (k,v)| memo[k.gsub(/[A-Z]/){|c| '_'+c.downcase}] = v; memo}
+        user_obj = user.inject({}){|memo, (k,v)| memo[k.gsub(/[A-Z]/){|c| '_'+c.downcase}] = v; memo}
+        begin
+          user_obj = user_obj['userinfo']
+        rescue => e
+          fail!(:invalid_user, e)
+        end
 ap user_obj
         OmniAuth::Utils.deep_merge(super, {
           'uid'       => user_obj['uid'],
@@ -99,6 +102,8 @@ ap user_obj
       end
       
       def user
+ap 'in user...'
+ap @options
         # Can't get user data without a UID from the application
         begin
           raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
@@ -107,7 +112,8 @@ ap user_obj
           fail!(:uid_not_found, e)
         end
 
-        url = URI.escape(@options[:cas_server] + @options[:uid])
+        url = URI.escape(@options[:cas_server] + '/' + @options[:uid])
+ap Casport.get(url+'.xml').parsed_response #<-- it appears our headers aren't going through properly to HTTParty...ugh
         begin
           cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
           unless @user = (cache.get @options[:uid])
@@ -123,27 +129,24 @@ ap user_obj
         rescue Errno::ECONNREFUSED => e
           @user ||= Casport.get(url).parsed_response
         end
-ap @user
         @user = nil if user_empty?
         @user
       end
 
       # Investigate user_obj to see if it's empty (or anti-pattern data)
       def user_empty?
+ap 'in user_empty?...'
+ap @user
+ap "@user.class: #{@user.class}"
         is_empty = false
         is_empty = true if @user.nil?
         is_empty = true if @user.empty?
-        begin
-          if @user.class == String
-            case @user
-              when "User has not been authenticated! Verify you are using 2-way SSL."
-                is_empty = true
-                raise "Invalid object returned from CASPORT"
-            end
-          end
-        rescue => e
-          fail!(@user.to_sym, e)
+        # If it isn't empty yet, let's convert it into a Hash object for easy parsing via eval
+        unless @user.class == Hash
+          is_empty = true
+          raise "String returned when a Hash was expected."
         end
+ap "is_empty? #{is_empty}"
         is_empty == true ? true : nil
       end
       
