@@ -28,6 +28,8 @@ module OmniAuth
 
       include OmniAuth::Strategy
       include HTTParty
+
+      debug_output $stderr
       
       def initialize(app, options)
         super(app, :casport)
@@ -62,15 +64,12 @@ module OmniAuth
       def auth_hash
         # store user in a local var to avoid new method calls for each attribute
         # convert all Java camelCase keys to Ruby snake_case, it just feels right!
-ap 'in auth_hash...'
-ap user
         user_obj = user.inject({}){|memo, (k,v)| memo[k.gsub(/[A-Z]/){|c| '_'+c.downcase}] = v; memo}
         begin
           user_obj = user_obj['userinfo']
         rescue => e
           fail!(:invalid_user, e)
         end
-ap user_obj
         OmniAuth::Utils.deep_merge(super, {
           'uid'       => user_obj['uid'],
           'user_info' => {
@@ -102,8 +101,6 @@ ap user_obj
       end
       
       def user
-ap 'in user...'
-ap @options
         # Can't get user data without a UID from the application
         begin
           raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
@@ -112,8 +109,7 @@ ap @options
           fail!(:uid_not_found, e)
         end
 
-        url = URI.escape(@options[:cas_server] + '/' + @options[:uid])
-ap Casport.get(url+'.xml').parsed_response #<-- it appears our headers aren't going through properly to HTTParty...ugh
+        url = URI.escape("#{@options[:cas_server]}/#{@options[:uid]}.#{@options[:format]}")
         begin
           cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
           unless @user = (cache.get @options[:uid])
@@ -135,9 +131,6 @@ ap Casport.get(url+'.xml').parsed_response #<-- it appears our headers aren't go
 
       # Investigate user_obj to see if it's empty (or anti-pattern data)
       def user_empty?
-ap 'in user_empty?...'
-ap @user
-ap "@user.class: #{@user.class}"
         is_empty = false
         is_empty = true if @user.nil?
         is_empty = true if @user.empty?
@@ -146,7 +139,6 @@ ap "@user.class: #{@user.class}"
           is_empty = true
           raise "String returned when a Hash was expected."
         end
-ap "is_empty? #{is_empty}"
         is_empty == true ? true : nil
       end
       
