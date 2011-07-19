@@ -11,13 +11,13 @@ module OmniAuth
     # @example Basic Usage
     #
     #  use OmniAuth::Strategies::Casport, {
-    #        :setup       => true, 
+    #        :setup       => true
     #      }
     # @example Full Options Usage
     #
     #  use OmniAuth::Strategies::Casport, {
     #        :setup         => true,
-    #        :cas_server    => 'https://cas.dev',
+    #        :cas_server    => 'http://cas.slkdemos.com/users/',
     #        :format        => 'xml',
     #        :format_header => 'application/xml',
     #        :ssl_ca_file   => 'path/to/ca_file.crt',
@@ -38,10 +38,13 @@ module OmniAuth
       end
 
       def request_phase
-        # Can't get user data without their UID for the CASPORT server 
-#        raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
+#        begin
+#          # Can't get user data without their UID for the CASPORT server 
+#          raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
+#        rescue StandardError => e
+#          fail!(:uid_not_found, e)
+#        end
         Casport.setup_httparty(@options)
-        url = URI.escape(@options[:cas_server] + @options[:uid].to_s)
         redirect(callback_path)
       end
     
@@ -57,15 +60,21 @@ module OmniAuth
       end
 
       def auth_hash
-        user_obj = user['hash'] # store user in local var to prevent multiple method queries
+        # store user in a local var to avoid new method calls for each attribute
+        # convert all Java camelCase keys to Ruby snake_case, it just feels right!
+ap 'in auth_hash...'
+ap @options
+ap user
+ap eval(user)
+        user_obj = user['userinfo'].inject({}){|memo, (k,v)| memo[k.gsub(/[A-Z]/){|c| '_'+c.downcase}] = v; memo}
 ap user_obj
         OmniAuth::Utils.deep_merge(super, {
-          'uid'       => user_obj['userinfo']['uid'],
+          'uid'       => user_obj['uid'],
           'user_info' => {
-                          'name' => user_obj['userinfo']['fullName'],
-                          'email' => user_obj['userinfo']['email']
+                          'name' => user_obj['full_name'],
+                          'email' => user_obj['email']
                          },
-          'extra'     => user_obj
+          'extra'     => {'user_hash' => user_obj}
         })
       end
 
@@ -93,44 +102,51 @@ ap user_obj
         # Can't get user data without a UID from the application
         begin
           raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
+          @options[:uid] = @options[:uid].to_s
         rescue => e
           fail!(:uid_not_found, e)
         end
-        
-        url = URI.escape(@options[:cas_server] + @options[:uid].to_s)
+
+        url = URI.escape(@options[:cas_server] + @options[:uid])
         begin
           cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
-          unless @user = (cache.get @options[:uid].to_s)
+          unless @user = (cache.get @options[:uid])
             # User is not in the cache
             # Retrieving the user data from CASPORT
             # {'userinfo' => {{'uid' => UID}, {'fullName' => NAME},...}},
             @user = Casport.get(url).parsed_response
-            cache.set @options[:uid].to_s, @user
+            cache.set @options[:uid], @user
             # CASPORT expiration time for user (24 hours => 1440 seconds)
-            cache.expire @options[:uid].to_s, 1440
+            cache.expire @options[:uid], 1440
           end
         # If we can't connect to Redis...
         rescue Errno::ECONNREFUSED => e
           @user ||= Casport.get(url).parsed_response
         end
-        @user = nil if empty_user?(@user)
-        return eval(@user) unless @user.nil?
+ap @user
+        @user = nil if user_empty?
+        @user
       end
 
       # Investigate user_obj to see if it's empty (or anti-pattern data)
-      def empty_user?(user_obj)
+      def user_empty?
         is_empty = false
-        is_empty = true if user_obj.nil?
-        is_empty = true if user_obj.empty?
-        if user_obj.class == String
-          case user_obj.to_s
-            when "User has not been authenticated! Verify you are using 2-way SSL."
-              is_empty = true
+        is_empty = true if @user.nil?
+        is_empty = true if @user.empty?
+        begin
+          if @user.class == String
+            case @user
+              when "User has not been authenticated! Verify you are using 2-way SSL."
+                is_empty = true
+                raise "Invalid object returned from CASPORT"
+            end
           end
+        rescue => e
+          fail!(@user.to_sym, e)
         end
         is_empty == true ? true : nil
       end
+      
     end
-
   end
 end
