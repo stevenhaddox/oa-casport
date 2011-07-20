@@ -28,8 +28,6 @@ module OmniAuth
 
       include OmniAuth::Strategy
       include HTTParty
-
-      debug_output $stderr
       
       def initialize(app, options)
         super(app, :casport)
@@ -40,12 +38,8 @@ module OmniAuth
       end
 
       def request_phase
-#        begin
-#          # Can't get user data without their UID for the CASPORT server 
-#          raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
-#        rescue StandardError => e
-#          fail!(:uid_not_found, e)
-#        end
+        # Can't get user data without their UID for the CASPORT server 
+        raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
         Casport.setup_httparty(@options)
         redirect(callback_path)
       end
@@ -63,10 +57,10 @@ module OmniAuth
 
       def auth_hash
         # store user in a local var to avoid new method calls for each attribute
-        # convert all Java camelCase keys to Ruby snake_case, it just feels right!
-        user_obj = user.inject({}){|memo, (k,v)| memo[k.gsub(/[A-Z]/){|c| '_'+c.downcase}] = v; memo}
+        user_obj = user
         begin
-          user_obj = user_obj['userinfo']
+          # convert all Java camelCase keys to Ruby snake_case, it just feels right!
+          user_obj = user_obj['userinfo'].inject({}){|memo, (k,v)| memo[k.gsub(/[A-Z]/){|c| '_'+c.downcase}] = v; memo}
         rescue => e
           fail!(:invalid_user, e)
         end
@@ -111,6 +105,7 @@ module OmniAuth
 
         url = URI.escape("#{@options[:cas_server]}/#{@options[:uid]}.#{@options[:format]}")
         begin
+          raise Errno::ECONNREFUSED if @options[:redis_options] == 'disabled'
           cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
           unless @user = (cache.get @options[:uid])
             # User is not in the cache
