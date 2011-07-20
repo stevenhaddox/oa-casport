@@ -1,4 +1,4 @@
-# oa-casport is a custom strategy for authentication with Casport that works with the OmniAuth gem
+# oa-casport is a custom strategy for OmniAuth authentication via Casport
 
 ## Examples:
 
