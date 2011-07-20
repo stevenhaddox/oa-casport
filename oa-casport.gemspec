@@ -7,9 +7,9 @@ Gem::Specification.new do |s|
   s.version     = OmniAuth::Casport::VERSION
   s.authors     = ["Jesus Jackson", "Steven Haddox"]
   s.email       = ["jesusejackson@gmail.com", "stevenhaddox@shortmail.com"]
-  s.homepage    = "http://oa-casport.slkdemos.com"
+  s.homepage    = "https://github.com/stevenhaddox/oa-casport"
   s.summary     = %q{OmniAuth gem for internal casport server}
-  s.description = %q{ Simple gem to enable rack powered Ruby apps to authenticate internally via CASPORT with ease}
+  s.description = %q{ Simple gem to enable rack powered Ruby apps to authenticate internally via casport with ease}
   s.rubyforge_project = "oa-casport"
 
   s.files         = `git ls-files`.split("\n")
