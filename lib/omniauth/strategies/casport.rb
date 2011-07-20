@@ -18,7 +18,7 @@ module OmniAuth
     #  use OmniAuth::Strategies::Casport, {
     #        :setup         => true,
     #        :cas_server    => 'http://cas.slkdemos.com/users/',
-    #        :format        => 'xml',
+    #        :format        => 'json', 'xml', 'html', etc. || Defaults to 'xml'
     #        :format_header => 'application/xml',
     #        :ssl_ca_file   => 'path/to/ca_file.crt',
     #        :pem_cert      => '/path/to/cert.pem',
