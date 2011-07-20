@@ -24,7 +24,8 @@ Configuration within the initializer for OmniAuth:
     #        :format_header => 'application/xml',
     #        :ssl_ca_file   => 'path/to/ca_file.crt',
     #        :pem_cert      => '/path/to/cert.pem',
-    #        :pem_cert_pass => 'keep it secret, keep it safe.'
-    #      }
+    #        :pem_cert_pass => 'keep it secret, keep it safe.',
+    #        :redis_options => 'disabled'
+    #  }
 
   
