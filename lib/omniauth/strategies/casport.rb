@@ -99,7 +99,15 @@ module OmniAuth
         # Can't get user data without a UID from the application
         begin
           raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
-          @options[:uid] = @options[:uid].to_s
+          # Fix DN order (if we have a DN) for CASPORT to work properly
+          if @options[:uid].include?('/') or @options[:uid].include?(',')
+            # Convert '/' to ',' and split on ','
+            @options[:uid] = @options[:uid].gsub(',',',').split(',').reject{|array| array.all? {|el| el.nil? || el.strip.empty? }}
+            # See if the DN is in the order CASPORT expects (and fix if needed)
+            @options[:uid] = @options[:uid].reverse if @options[:uid].first.downcase.include? 'c='
+            # Join our array of DN elements back together with a comma as expected by CASPORT
+            @options[:uid] = @options.join ','
+          end
         rescue => e
           fail!(:uid_not_found, e)
         end
