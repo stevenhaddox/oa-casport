@@ -84,6 +84,7 @@ module OmniAuth
       def self.setup_httparty(opts)
         format opts[:format].to_sym
         headers 'Accept' => opts[:format_header]
+        headers 'Content-Type' => opts[:format_header]
         if opts[:ssl_ca_file]
           ssl_ca_file opts[:ssl_ca_file]
           if opts[:pem_cert_pass]
@@ -134,6 +135,8 @@ module OmniAuth
           is_empty = true
           raise "String returned when a Hash was expected."
         end
+        # If we don't have a userinfo key then it was an invalid user
+        is_empty = true unless @user['userinfo']
         is_empty == true ? true : nil
       end
       
