@@ -144,10 +144,6 @@ module OmniAuth
           is_empty = true
           raise "String returned when a Hash was expected."
         end
-<<<<<<< HEAD
-=======
-        # If we don't have a userinfo key then it was an invalid user
->>>>>>> f4f682720906bf3c0ee17529f7eb2a72eb769ea2
         is_empty = true unless @user['userinfo']
         is_empty == true ? true : nil
       end
