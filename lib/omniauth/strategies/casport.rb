@@ -103,12 +103,12 @@ module OmniAuth
           raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
           # Fix DN order (if we have a DN) for CASPORT to work properly
           if @options[:uid].include?('/') or @options[:uid].include?(',')
-            # Convert '/' to ',' and split on ',' (and reject empty elements)
-            @options[:uid] = @options[:uid].gsub('/',',').split(',').reject{|el| el.nil? || el.empty? }
-            # See if the DN is in the order CASPORT expects (and fix it if needed)
+            # Convert '/' to ',' and split on ','
+            @options[:uid] = @options[:uid].gsub(',',',').split(',').reject{|array| array.all? {|el| el.nil? || el.strip.empty? }}
+            # See if the DN is in the order CASPORT expects (and fix if needed)
             @options[:uid] = @options[:uid].reverse if @options[:uid].first.downcase.include? 'c='
             # Join our array of DN elements back together with a comma as expected by CASPORT
-            @options[:uid] = @options[:uid].join ','
+            @options[:uid] = @options.join ','
           end
         rescue => e
           fail!(:uid_not_found, e)
@@ -144,6 +144,10 @@ module OmniAuth
           is_empty = true
           raise "String returned when a Hash was expected."
         end
+<<<<<<< HEAD
+=======
+        # If we don't have a userinfo key then it was an invalid user
+>>>>>>> f4f682720906bf3c0ee17529f7eb2a72eb769ea2
         is_empty = true unless @user['userinfo']
         is_empty == true ? true : nil
       end
