@@ -22,7 +22,8 @@ module OmniAuth
     #        :format_header => 'application/xml',
     #        :ssl_ca_file   => 'path/to/ca_file.crt',
     #        :pem_cert      => '/path/to/cert.pem',
-    #        :pem_cert_pass => 'keep it secret, keep it safe.'
+    #        :pem_cert_pass => 'keep it secret, keep it safe.',
+    #        :redis_options => 'disabled'
     #      }
     class Casport
 
@@ -65,7 +66,7 @@ module OmniAuth
           fail!(:invalid_user, e)
         end
         OmniAuth::Utils.deep_merge(super, {
-          'uid'       => user_obj['uid'],
+          'uid'       => user_obj['dn'],
           'user_info' => {
                           'name' => user_obj['full_name'],
                           'email' => user_obj['email']
@@ -83,7 +84,9 @@ module OmniAuth
       # :pem_cert_pass - plaintext password, not recommended!
       def self.setup_httparty(opts)
         format opts[:format].to_sym
-        headers 'Accept' => opts[:format_header]
+        headers 'Accept'               => opts[:format_header]
+        headers 'Content-Type'         => opts[:format_header]
+        headers 'X-XSRF-UseProtection' => 'false' if opts[:format] == 'json'
         if opts[:ssl_ca_file]
           ssl_ca_file opts[:ssl_ca_file]
           if opts[:pem_cert_pass]
@@ -98,7 +101,15 @@ module OmniAuth
         # Can't get user data without a UID from the application
         begin
           raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
-          @options[:uid] = @options[:uid].to_s
+          # Fix DN order (if we have a DN) for CASPORT to work properly
+          if @options[:uid].include?('/') or @options[:uid].include?(',')
+            # Convert '/' to ',' and split on ',' (and reject empty elements)
+            @options[:uid] = @options[:uid].gsub('/',',').split(',').reject{|el| el.nil? || el.empty? }
+            # See if the DN is in the order CASPORT expects (and fix it if needed)
+            @options[:uid] = @options[:uid].reverse if @options[:uid].first.downcase.include? 'c='
+            # Join our array of DN elements back together with a comma as expected by CASPORT
+            @options[:uid] = @options[:uid].join ','
+          end
         rescue => e
           fail!(:uid_not_found, e)
         end
@@ -129,11 +140,11 @@ module OmniAuth
         is_empty = false
         is_empty = true if @user.nil?
         is_empty = true if @user.empty?
-        # If it isn't empty yet, let's convert it into a Hash object for easy parsing via eval
         unless @user.class == Hash
           is_empty = true
           raise "String returned when a Hash was expected."
         end
+        is_empty = true unless @user['userinfo']
         is_empty == true ? true : nil
       end
       
