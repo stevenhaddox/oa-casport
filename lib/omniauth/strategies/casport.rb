@@ -104,7 +104,7 @@ module OmniAuth
           # Fix DN order (if we have a DN) for CASPORT to work properly
           if @options[:uid].include?('/') or @options[:uid].include?(',')
             # Convert '/' to ',' and split on ','
-            @options[:uid] = @options[:uid].gsub(',',',').split(',').reject{|array| array.all? {|el| el.nil? || el.strip.empty? }}
+            @options[:uid] = @options[:uid].gsub('/',',').split(',').reject{|array| array.all? {|el| el.nil? || el.strip.empty? }}
             # See if the DN is in the order CASPORT expects (and fix if needed)
             @options[:uid] = @options[:uid].reverse if @options[:uid].first.downcase.include? 'c='
             # Join our array of DN elements back together with a comma as expected by CASPORT
