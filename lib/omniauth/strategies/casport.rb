@@ -2,6 +2,7 @@ require 'omniauth/core'
 require 'httparty'
 require 'redis'
 require 'uri'
+require 'yaml'
 
 module OmniAuth
   module Strategies
@@ -11,20 +12,20 @@ module OmniAuth
     # @example Basic Usage
     #
     #  use OmniAuth::Strategies::Casport, {
-    #        :setup       => true
-    #      }
+    #    :setup       => true
+    #  }
     # @example Full Options Usage
     #
     #  use OmniAuth::Strategies::Casport, {
-    #        :setup         => true,
-    #        :cas_server    => 'http://cas.slkdemos.com/users/',
-    #        :format        => 'json', 'xml', 'html', etc. || Defaults to 'xml'
-    #        :format_header => 'application/xml',
-    #        :ssl_ca_file   => 'path/to/ca_file.crt',
-    #        :pem_cert      => '/path/to/cert.pem',
-    #        :pem_cert_pass => 'keep it secret, keep it safe.',
-    #        :redis_options => 'disabled'
-    #      }
+    #    :setup         => true,
+    #    :cas_server    => 'http://cas.slkdemos.com/users/',
+    #    :format        => 'json', 'xml', 'html', etc. || Defaults to 'xml'
+    #    :format_header => 'application/xml',
+    #    :ssl_ca_file   => 'path/to/ca_file.crt',
+    #    :pem_cert      => '/path/to/cert.pem',
+    #    :pem_cert_pass => 'keep it secret, keep it safe.',
+    #    :redis_options => 'disabled' or options_hash || Defaults to {:host => '127.0.0.1', :port => 6739}
+    #  }
     class Casport
 
       include OmniAuth::Strategy
@@ -105,7 +106,7 @@ module OmniAuth
           if @options[:uid].include?('/') or @options[:uid].include?(',')
             # Convert '/' to ',' and split on ','
             @options[:uid] = @options[:uid].gsub('/',',').split(',').reject{|array| array.all? {|el| el.nil? || el.strip.empty? }}
-            # See if the DN is in the order CASPORT expects (and fix if needed)
+            # See if the DN is in the order CASPORT expects (and fix it if needed)
             @options[:uid] = @options[:uid].reverse if @options[:uid].first.downcase.include? 'c='
             # Join our array of DN elements back together with a comma as expected by CASPORT
             @options[:uid] = @options.join ','
@@ -123,9 +124,12 @@ module OmniAuth
             # Retrieving the user data from CASPORT
             # {'userinfo' => {{'uid' => UID}, {'fullName' => NAME},...}},
             @user = Casport.get(url).parsed_response
-            cache.set @options[:uid], @user
+            cache.set @options[:uid], @user.to_yaml
             # CASPORT expiration time for user (24 hours => 1440 seconds)
             cache.expire @options[:uid], 1440
+          else
+            # We found our user in the cache, let's parse it into a Ruby object
+            @user = YAML::load(@user)
           end
         # If we can't connect to Redis...
         rescue Errno::ECONNREFUSED => e
