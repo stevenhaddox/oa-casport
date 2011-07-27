@@ -115,7 +115,6 @@ module OmniAuth
           fail!(:uid_not_found, e)
         end
 
-        url = URI.escape("#{@options[:cas_server]}/#{@options[:uid]}.#{@options[:format]}")
         begin
           raise Errno::ECONNREFUSED if @options[:redis_options] == 'disabled'
           cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
@@ -123,33 +122,33 @@ module OmniAuth
             # User is not in the cache
             # Retrieving the user data from CASPORT
             # {'userinfo' => {{'uid' => UID}, {'fullName' => NAME},...}},
-            @user = Casport.get(url).parsed_response
-            cache.set @options[:uid], @user.to_yaml
-            # CASPORT expiration time for user (24 hours => 1440 seconds)
-            cache.expire @options[:uid], 1440
+            get_user
+            if @user
+              # Set Redis object for the user, and expire after 24 hours
+              cache.set @options[:uid], @user.to_yaml
+              cache.expire @options[:uid], 1440
+            end
           else
             # We found our user in the cache, let's parse it into a Ruby object
             @user = YAML::load(@user)
           end
         # If we can't connect to Redis...
         rescue Errno::ECONNREFUSED => e
-          @user ||= Casport.get(url).parsed_response
+          get_user
         end
-        @user = nil if user_empty?
         @user
       end
 
-      # Investigate user_obj to see if it's empty (or anti-pattern data)
-      def user_empty?
-        is_empty = false
-        is_empty = true if @user.nil?
-        is_empty = true if @user.empty?
-        unless @user.class == Hash
-          is_empty = true
-          raise "String returned when a Hash was expected."
+      # Query for the user against CASPORT, return as nil or parsed object
+      def get_user
+        return if @user # no extra http calls
+        url = URI.escape("#{@options[:cas_server]}/#{@options[:uid]}.#{@options[:format]}")
+        response = Casport.get(url)
+        if response.success?
+          @user = response.parsed_response
+        else
+          @user = nil
         end
-        is_empty = true unless @user['userinfo']
-        is_empty == true ? true : nil
       end
       
     end
