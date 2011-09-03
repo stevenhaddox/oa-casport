@@ -1,15 +1,11 @@
-require 'rubygems'
-require 'bundler/setup'
-
-require 'fakeweb'
+$:.unshift File.dirname(__FILE__) + '/../lib'
+require 'rack'
+require 'rspec'
 require 'oa-casport'
+require 'fakeweb'
 require 'httparty'
 require 'redis'
 
 RSpec.configure do |config|
   # some (optional) config here
-end
-
-before(:each) do
-  FakeWeb.clean_registry
 end

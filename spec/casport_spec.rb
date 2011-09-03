@@ -1,9 +1,14 @@
 require 'spec_helper'
-require File.expand_path(File.dirname(__FILE__) + '../lib/omniauth/strategies/casport.rb')
+#require File.expand_path(File.dirname(__FILE__) + '/../lib/omniauth/strategies/casport.rb')
 
-desribe ".user" do
-  let(:app) { lamdba { |env| [200, {}, ['Test']] } }
+
+describe "Casport" do
+  before(:all) do
+    FakeWeb.clean_registry
+  end
   
+  let(:app) { lamdba { |env| [200, {}, ['Test']] } }
+
   it "should have correct xml returned" do
     result = {'userinfo' => {'name' => 'Tyler Durden'}}
     userinfo = '<userinfo><name>Tyler Durden</name></userinfo>'
