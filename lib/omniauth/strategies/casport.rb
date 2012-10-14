@@ -1,5 +1,6 @@
-require 'omniauth/core'
-require 'httparty'
+#require 'multi_xml'
+#require 'multi_json'
+require 'omniauth'
 require 'redis'
 require 'uri'
 require 'yaml'
@@ -11,50 +12,72 @@ module OmniAuth
     #
     # @example Basic Usage
     #
-    #  use OmniAuth::Strategies::Casport, {
-    #    :setup       => true
-    #  }
+    #  use OmniAuth::Strategies::Casport
+    #
     # @example Full Options Usage
     #
     #  use OmniAuth::Strategies::Casport, {
-    #    :setup         => true,
     #    :cas_server    => 'http://cas.slkdemos.com/users/',
     #    :format        => 'json', 'xml', 'html', etc. || Defaults to 'xml'
-    #    :format_header => 'application/xml',
+    #    :format_header => 'application/json', 'application/xml' || Defaults to 'application/xml'
+    #    :redis_options => 'disabled' or opts: {:host => '127.0.0.1', :port => 6739} || Default is 'disabled'
     #    :ssl_ca_file   => 'path/to/ca_file.crt',
     #    :pem_cert      => '/path/to/cert.pem',
     #    :pem_cert_pass => 'keep it secret, keep it safe.',
-    #    :redis_options => 'disabled' or options_hash || Defaults to {:host => '127.0.0.1', :port => 6739}
     #  }
     class Casport
-
       include OmniAuth::Strategy
-      include HTTParty
-      
-      def initialize(app, options)
-        super(app, :casport)
-        @options = options
-        @options[:cas_server]    ||= 'http://cas.dev/users'
-        @options[:format]        ||= 'xml'
-        @options[:format_header] ||= 'application/xml'
+
+      option :name, 'casport'
+      option :uid_field, :dn
+      option :setup, true
+
+      # Default values for Casport client
+      option :client_options, {
+        'cas_server'         => 'http://casport.dev',
+        'format'             => 'xml',
+        'format_header'      => 'application/xml',
+        'authorization_type' => 'user'
+      }
+
+      def authorization_path
+        if options.client_options[:authorization_path].nil?
+          auth_path = case options.client_options[:authorization_type]
+          when 'group'
+            #TODO
+            "/groups/#{options.client_options[:group_name]}/"
+          when 'user'
+            '/users'
+          end
+        else
+          auth_path = options.client_options[:authorization_path]
+        end
       end
 
       def request_phase
-        # Can't get user data without their UID for the CASPORT server 
-        raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
-        Casport.setup_httparty(@options)
-        redirect(callback_path)
+        raise "No UID set in request.env['omniauth.strategy'].options[:dn]" if options.dn.nil?
+        # Request JSON / XML object via multi_json or multi_xml
+
+        # Return response to the callback_url
+        redirect callback_url
+        #redirect "#{options.client_options.cas_server}#{authorization_path}/#{options.dn}"
       end
-    
+
+#      uid { request.params[options.uid_field.to_s] }
+
+#      info do
+#        options.fields.inject({}) do |hash, field|
+#          hash[field] = request.params[field]
+#          hash
+#        end
+#      end
+
       def callback_phase
-        begin
-          raise 'We seemed to have misplaced your credentials... O_o' if user.nil?
-          super
-        rescue => e
-          redirect(request_path)
-#          fail!(:invalid_credentials, e)
-        end
-        call_app!
+        puts '!'*80
+        puts 'IN #callback_phase'
+        puts '!'*80
+
+        super
       end
 
       def auth_hash
@@ -97,7 +120,7 @@ module OmniAuth
           end
         end
       end
-      
+
       def user
         # Can't get user data without a UID from the application
         begin
@@ -150,7 +173,7 @@ module OmniAuth
           @user = nil
         end
       end
-      
+
     end
   end
 end

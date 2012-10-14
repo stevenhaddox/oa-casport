@@ -1,11 +1,17 @@
-$:.unshift File.dirname(__FILE__) + '/../lib'
-require 'rack'
+$:.unshift File.expand_path('..', __FILE__)
+$:.unshift File.expand_path('../../lib', __FILE__)
+
+require 'simplecov'
+SimpleCov.start
+
 require 'rspec'
+require 'rack/test'
+require 'webmock/rspec'
+require 'omniauth'
 require 'oa-casport'
-require 'fakeweb'
-require 'httparty'
-require 'redis'
 
 RSpec.configure do |config|
-  # some (optional) config here
+  config.include WebMock::API
+  config.include Rack::Test::Methods
+  config.extend  OmniAuth::Test::StrategyMacros, :type => :strategy
 end

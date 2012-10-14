@@ -1,4 +1,7 @@
 *.gem
+*.bak
+*.swp
 .bundle
 Gemfile.lock
 pkg/*
+coverage
