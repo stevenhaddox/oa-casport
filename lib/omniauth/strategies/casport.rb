@@ -1,7 +1,6 @@
 #require 'multi_xml'
 #require 'multi_json'
 require 'omniauth'
-require 'redis'
 require 'uri'
 require 'yaml'
 
@@ -138,27 +137,29 @@ module OmniAuth
           fail!(:uid_not_found, e)
         end
 
-        begin
-          raise Errno::ECONNREFUSED if @options[:redis_options] == 'disabled'
-          cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
-          unless @user = (cache.get @options[:uid])
-            # User is not in the cache
-            # Retrieving the user data from CASPORT
-            # {'userinfo' => {{'uid' => UID}, {'fullName' => NAME},...}},
-            get_user
-            if @user
-              # Set Redis object for the user, and expire after 24 hours
-              cache.set @options[:uid], @user.to_yaml
-              cache.expire @options[:uid], 1440
-            end
-          else
-            # We found our user in the cache, let's parse it into a Ruby object
-            @user = YAML::load(@user)
-          end
+	#Commenting out redis support due to GitLab conflict
+	
+        #begin
+        #  raise Errno::ECONNREFUSED if @options[:redis_options] == 'disabled'
+        #  cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
+        #  unless @user = (cache.get @options[:uid])
+        #    # User is not in the cache
+        #    # Retrieving the user data from CASPORT
+        #    # {'userinfo' => {{'uid' => UID}, {'fullName' => NAME},...}},
+        #    get_user
+        #    if @user
+        #      # Set Redis object for the user, and expire after 24 hours
+        #      cache.set @options[:uid], @user.to_yaml
+        #      cache.expire @options[:uid], 1440
+        #    end
+        #  else
+        #    # We found our user in the cache, let's parse it into a Ruby object
+        #    @user = YAML::load(@user)
+        #  end
         # If we can't connect to Redis...
-        rescue Errno::ECONNREFUSED => e
-          get_user
-        end
+        #rescue Errno::ECONNREFUSED => e
+        get_user
+        #end
         @user
       end
 
