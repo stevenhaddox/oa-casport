@@ -1,27 +1,31 @@
 # -*- encoding: utf-8 -*-
-$:.push File.expand_path("../lib", __FILE__)
-require "oa-casport/version"
+lib = File.expand_path('../lib', __FILE__)
+$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
+require 'oa-casport/version'
 
-Gem::Specification.new do |s|
-  s.name        = "oa-casport"
-  s.version     = OmniAuth::Casport::VERSION
-  s.authors     = ["Jesus Jackson", "Steven Haddox"]
-  s.email       = ["jesusejackson@gmail.com", "stevenhaddox@shortmail.com"]
-  s.homepage    = "https://github.com/stevenhaddox/oa-casport"
-  s.summary     = %q{OmniAuth gem for internal casport server}
-  s.description = %q{ Simple gem to enable rack powered Ruby apps to authenticate internally via casport with ease}
-  s.rubyforge_project = "oa-casport"
+Gem::Specification.new do |gem|
+  gem.name          = "oa-casport"
+  gem.version       = OmniAuth::Casport::VERSION
+  gem.authors       = ["Steven Haddox"]
+  gem.email         = ["stevenhaddox@shortmail.com"]
+  gem.description   = %q{ Simple gem to enable rack powered Ruby apps to authenticate internally via casport with ease}
+  gem.summary       = %q{OmniAuth gem for internal casport server}
+  gem.homepage      = "https://github.com/stevenhaddox/oa-casport"
 
-  s.files         = `git ls-files`.split("\n")
-  s.test_files    = `git ls-files -- {test,spec,features}/*`.split("\n")
-  s.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
-  s.require_paths = ["lib"]
+  gem.files         = `git ls-files`.split($/)
+  gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
+  gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
+  gem.require_paths = ["lib"]
 
-  s.add_dependency 'oa-core'
-  s.add_dependency 'httparty'
-  s.add_dependency 'redis'
+  gem.add_runtime_dependency 'omniauth', '~> 1.0'
 
-  s.add_development_dependency 'rack'
-  s.add_development_dependency 'rspec'
-  s.add_development_dependency 'fakeweb'
+  gem.add_dependency 'httparty'
+
+  gem.add_development_dependency 'rack-test'
+  gem.add_development_dependency 'rake'
+  gem.add_development_dependency 'rspec', '~> 2.6'
+  gem.add_development_dependency 'sinatra'
+  gem.add_development_dependency 'simplecov'
+  gem.add_development_dependency 'webmock', '~> 1.7'
+  gem.add_development_dependency 'yard'
 end
