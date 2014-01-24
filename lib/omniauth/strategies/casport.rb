@@ -1,9 +1,7 @@
-#require 'multi_xml'
-#require 'multi_json'
 require 'omniauth'
-require 'redis'
 require 'uri'
 require 'yaml'
+require 'httparty'
 
 module OmniAuth
   module Strategies
@@ -20,7 +18,6 @@ module OmniAuth
     #    :cas_server    => 'http://cas.slkdemos.com/users/',
     #    :format        => 'json', 'xml', 'html', etc. || Defaults to 'xml'
     #    :format_header => 'application/json', 'application/xml' || Defaults to 'application/xml'
-    #    :redis_options => 'disabled' or opts: {:host => '127.0.0.1', :port => 6739} || Default is 'disabled'
     #    :ssl_ca_file   => 'path/to/ca_file.crt',
     #    :pem_cert      => '/path/to/cert.pem',
     #    :pem_cert_pass => 'keep it secret, keep it safe.',
@@ -28,152 +25,132 @@ module OmniAuth
     class Casport
       include OmniAuth::Strategy
 
-      option :name, 'casport'
-      option :uid_field, :dn
+      option :uid_field, 'dn'
       option :setup, true
+      option :cas_server, 'http://default_setting_changeme.casport.dev'
+      option :ssl_ca_file, nil
+      option :pem_cert, 'default_path_changeme/path/to/cert.pem'
+      option :pem_cert_pass, nil
+      option :format_header, 'application/json'
+      option :format, 'json'
+      option :dn_header, 'HTTP_SSL_CLIENT_S_DN'
+      option :debug, nil
+      option :log_file, nil
 
-      # Default values for Casport client
-      option :client_options, {
-        'cas_server'         => 'http://casport.dev',
-        'format'             => 'xml',
-        'format_header'      => 'application/xml',
-        'authorization_type' => 'user'
+      CASPORT_DEFAULTS = {
+        :dn => nil,
+        :full_name => nil,
+        :last_name => nil,
+        :uid => nil,
+        :first_name => "",
+        :display_name => "",
+        :title => "",
+        :email => "",
+        :employee_id => "",
+        :personal_title => "",
+        :telephone_number => "",
       }
 
-      def authorization_path
-        if options.client_options[:authorization_path].nil?
-          auth_path = case options.client_options[:authorization_type]
-          when 'group'
-            #TODO
-            "/groups/#{options.client_options[:group_name]}/"
-          when 'user'
-            '/users'
-          end
-        else
-          auth_path = options.client_options[:authorization_path]
-        end
-      end
+      @user = {}
 
       def request_phase
-        raise "No UID set in request.env['omniauth.strategy'].options[:dn]" if options.dn.nil?
-        # Request JSON / XML object via multi_json or multi_xml
+        if !$LOG && @options[:debug] && @options[:log_file]
+          require 'logger'
+          $LOG ||= Logger.new(@options[:log_file]) 
+        end
+        $LOG.debug "#request_phase IN" if $LOG
+        
+        # Setup HTTParty
+        $LOG.debug "Setting up HTTParty" if $LOG
+        CasportHTTParty.setup_httparty @options
 
+        # Call to fill the user object
+        get_user
+        
         # Return response to the callback_url
+        $LOG.debug "#request_phase OUT" if $LOG
         redirect callback_url
-        #redirect "#{options.client_options.cas_server}#{authorization_path}/#{options.dn}"
-      end
-
-#      uid { request.params[options.uid_field.to_s] }
-
-#      info do
-#        options.fields.inject({}) do |hash, field|
-#          hash[field] = request.params[field]
-#          hash
-#        end
-#      end
-
-      def callback_phase
-        puts '!'*80
-        puts 'IN #callback_phase'
-        puts '!'*80
-
-        super
       end
 
       def auth_hash
-        # store user in a local var to avoid new method calls for each attribute
-        user_obj = user
-        begin
-          # convert all Java camelCase keys to Ruby snake_case, it just feels right!
-          user_obj = user_obj['userinfo'].inject({}){|memo, (k,v)| memo[k.gsub(/[A-Z]/){|c| '_'+c.downcase}] = v; memo}
-        rescue => e
-          fail!(:invalid_user, e)
-        end
+        $LOG.debug "#auth_hash IN" if $LOG
+        user_obj = get_user
+      
+        $LOG.debug "#auth_hash OUT" if $LOG
         OmniAuth::Utils.deep_merge(super, {
-          'uid'       => user_obj['dn'],
-          'user_info' => {
-                          'name' => user_obj['full_name'],
-                          'email' => user_obj['email']
-                         },
+          'uid' => user_obj[@options[:uid_field]],
+          'info' => {
+            'name' => user_obj['full_name'],
+            'email' => user_obj['email']
+          },
           'extra'     => {'user_hash' => user_obj}
         })
       end
 
-      # Set HTTParty params that we need to set after initialize is called
-      # These params come from @options within initialize and include the following:
-      # :ssl_ca_file - SSL CA File for SSL connections
-      # :format - 'json', 'xml', 'html', etc. || Defaults to 'xml'
-      # :format_header - :format Header string || Defaults to 'application/xml'
-      # :pem_cert - /path/to/a/pem_formatted_certificate.pem for SSL connections
-      # :pem_cert_pass - plaintext password, not recommended!
-      def self.setup_httparty(opts)
-        format opts[:format].to_sym
-        headers 'Accept'               => opts[:format_header]
-        headers 'Content-Type'         => opts[:format_header]
-        headers 'X-XSRF-UseProtection' => 'false' if opts[:format] == 'json'
-        if opts[:ssl_ca_file]
-          ssl_ca_file opts[:ssl_ca_file]
-          if opts[:pem_cert_pass]
-            pem File.read(opts[:pem_cert]), opts[:pem_cert_pass]
-          else
-            pem File.read(opts[:pem_cert])
-          end
-        end
-      end
-
-      def user
-        # Can't get user data without a UID from the application
-        begin
-          raise "No UID set in request.env['omniauth.strategy'].options[:uid]" if @options[:uid].nil?
-          # Fix DN order (if we have a DN) for CASPORT to work properly
-          if @options[:uid].include?('/') or @options[:uid].include?(',')
-            # Convert '/' to ',' and split on ','
-            @options[:uid] = @options[:uid].gsub('/',',').split(',').reject{|array| array.all? {|el| el.nil? || el.strip.empty? }}
-            # See if the DN is in the order CASPORT expects (and fix it if needed)
-            @options[:uid] = @options[:uid].reverse if @options[:uid].first.downcase.include? 'c='
-            # Join our array of DN elements back together with a comma as expected by CASPORT
-            @options[:uid] = @options.join ','
-          end
-        rescue => e
-          fail!(:uid_not_found, e)
-        end
-
-        begin
-          raise Errno::ECONNREFUSED if @options[:redis_options] == 'disabled'
-          cache = @options[:redis_options].nil? ? Redis.new : Redis.new(@options[:redis_options])
-          unless @user = (cache.get @options[:uid])
-            # User is not in the cache
-            # Retrieving the user data from CASPORT
-            # {'userinfo' => {{'uid' => UID}, {'fullName' => NAME},...}},
-            get_user
-            if @user
-              # Set Redis object for the user, and expire after 24 hours
-              cache.set @options[:uid], @user.to_yaml
-              cache.expire @options[:uid], 1440
-            end
-          else
-            # We found our user in the cache, let's parse it into a Ruby object
-            @user = YAML::load(@user)
-          end
-        # If we can't connect to Redis...
-        rescue Errno::ECONNREFUSED => e
-          get_user
-        end
-        @user
-      end
-
       # Query for the user against CASPORT, return as nil or parsed object
       def get_user
+        $LOG.debug "#get_user IN" if $LOG
         return if @user # no extra http calls
-        url = URI.escape("#{@options[:cas_server]}/#{@options[:uid]}.#{@options[:format]}")
-        response = Casport.get(url)
+
+        $LOG.debug "Must get user from CASPORT" if $LOG
+
+        if @options[:uid].nil? or @options[:uid].empty?
+          # Checking for DN
+          if request.env[@options[:dn_header]].nil? or request.env[@options[:dn_header]].empty?
+            # No clue what the DN or UID is...
+            $LOG.debug "#request_phase Error: No DN provided for UID in request.env[#{@options[:dn_header]}]" if $LOG
+            raise "#request_phase Error: No DN provided for UID"
+          else
+            # Set UID to DN
+            @options[:uid] = request.env[@options[:dn_header]]
+          end
+        end
+        # Fix DN order (if we have a DN) for CASPORT to work properly
+        if @options[:uid].include?('/') or @options[:uid].include?(',')
+          # Convert '/' to ',' and split on ','
+          @options[:uid] = @options[:uid].gsub('/',',').split(',').reject{|array| array.empty? }
+          # See if the DN is in the order CASPORT expects (and fix it if needed)
+          @options[:uid] = @options[:uid].reverse if @options[:uid].first.downcase.include? 'c='
+          # Join our array of DN elements back together with a comma as expected by CASPORT
+          @options[:uid] = @options[:uid].join(',')
+        end
+        url = URI.escape("#{@options[:cas_server]}/#{@options[:uid]}")
+        puts "#get_user Requesting URI: #{url}"
+        $LOG.debug "#get_user Requesting URI: #{url}" if $LOG
+        response = CasportHTTParty.get(url)
         if response.success?
+          $LOG.debug "#get_user Response:  Success!" if $LOG
+          $LOG.debug "#get_user response contents: #{response}" if $LOG
+          $LOG.debug "#get_user OUT" if $LOG
           @user = response.parsed_response
         else
+          $LOG.error "#get_user Response: failure." if $LOG
           @user = nil
         end
       end
-
     end
+
+    #Helper class to setup HTTParty, as OmniAuth 1.0+ seems to conflict with HTTParty.
+    class CasportHTTParty
+      include HTTParty
+
+      def self.setup_httparty(options)
+        options[:format]        ||= 'json'
+        options[:format_header] ||= 'application/json'
+
+        headers 'Accept'       => options[:format_header]
+        headers 'Content-Type' => options[:format_header]
+        headers 'X-XSRF-UseProtection' => 'false' if options[:format_header]
+        if options[:ssl_ca_file]
+          ssl_ca_file options[:ssl_ca_file]
+          if options[:pem_cert_pass]
+            pem File.read(options[:pem_cert]), options[:pem_cert_pass]
+          else
+            pem File.read(options[:pem_cert])
+          end
+        end
+      end
+    end
+
   end
 end
