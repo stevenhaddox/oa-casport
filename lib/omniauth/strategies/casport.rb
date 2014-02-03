@@ -52,30 +52,31 @@ module OmniAuth
       }
 
       @user = {}
+      @user_uid = ""
 
       def request_phase
         if !$LOG && @options[:debug] && @options[:log_file]
           require 'logger'
-          $LOG ||= Logger.new(@options[:log_file]) 
+          $LOG ||= Logger.new(@options[:log_file])
         end
-        $LOG.debug "#request_phase IN" if $LOG
-        
+        $LOG.debug "#request_phase IN, user_uid: '#{@user_uid}', reqenv: #{request.env[@options[:dn_header]]}" if $LOG
+
         # Setup HTTParty
         $LOG.debug "Setting up HTTParty" if $LOG
         CasportHTTParty.setup_httparty @options
 
         # Call to fill the user object
         get_user
-        
+
         # Return response to the callback_url
         $LOG.debug "#request_phase OUT" if $LOG
         redirect callback_url
       end
 
       def auth_hash
-        $LOG.debug "#auth_hash IN" if $LOG
+        $LOG.debug "#auth_hash IN, user_uid: '#{@user_uid}', reqenv: #{request.env[@options[:dn_header]]}" if $LOG
         user_obj = get_user
-      
+
         $LOG.debug "#auth_hash OUT" if $LOG
         OmniAuth::Utils.deep_merge(super, {
           'uid' => user_obj[@options[:uid_field]],
@@ -89,12 +90,12 @@ module OmniAuth
 
       # Query for the user against CASPORT, return as nil or parsed object
       def get_user
-        $LOG.debug "#get_user IN" if $LOG
+        $LOG.debug "#get_user IN, user_uid: '#{@user_uid}', reqenv: #{request.env[@options[:dn_header]]}" if $LOG
         return if @user # no extra http calls
 
         $LOG.debug "Must get user from CASPORT" if $LOG
 
-        if @options[:uid].nil? or @options[:uid].empty?
+        if @user_uid.nil? or @user_uid.empty?
           # Checking for DN
           if request.env[@options[:dn_header]].nil? or request.env[@options[:dn_header]].empty?
             # No clue what the DN or UID is...
@@ -102,19 +103,19 @@ module OmniAuth
             raise "#request_phase Error: No DN provided for UID"
           else
             # Set UID to DN
-            @options[:uid] = request.env[@options[:dn_header]]
+            @user_uid = request.env[@options[:dn_header]]
           end
         end
         # Fix DN order (if we have a DN) for CASPORT to work properly
-        if @options[:uid].include?('/') or @options[:uid].include?(',')
+        if @user_uid.include?('/') or @user_uid.include?(',')
           # Convert '/' to ',' and split on ','
-          @options[:uid] = @options[:uid].gsub('/',',').split(',').reject{|array| array.empty? }
+          @user_uid = @user_uid.gsub('/',',').split(',').reject{|array| array.empty? }
           # See if the DN is in the order CASPORT expects (and fix it if needed)
-          @options[:uid] = @options[:uid].reverse if @options[:uid].first.downcase.include? 'c='
+          @user_uid = @user_uid.reverse if @user_uid.first.downcase.include? 'c='
           # Join our array of DN elements back together with a comma as expected by CASPORT
-          @options[:uid] = @options[:uid].join(',')
+          @user_uid = @user_uid.join(',')
         end
-        url = URI.escape("#{@options[:cas_server]}/#{@options[:uid]}")
+        url = URI.escape("#{@options[:cas_server]}/#{@user_uid}")
         puts "#get_user Requesting URI: #{url}"
         $LOG.debug "#get_user Requesting URI: #{url}" if $LOG
         response = CasportHTTParty.get(url)
