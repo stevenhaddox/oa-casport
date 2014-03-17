@@ -95,13 +95,13 @@ module OmniAuth
         return if @user # no extra http calls
 
         $LOG.debug "Must get user from CASPORT" if $LOG
-        $LOG.debug @options[:fake_dn].nil?
+        #$LOG.debug @options[:fake_dn].nil?
 
         if @user_uid.nil? or @user_uid.empty?
           # Checking for DN
           if request.env[@options[:dn_header]].nil? or request.env[@options[:dn_header]].empty? and @options[:fake_dn].nil?
             # No clue what the DN or UID is...
-	    $LOG.debug @options[:fake_dn]
+            $LOG.debug @options[:fake_dn]
             $LOG.debug "#request_phase Error: No DN provided for UID in request.env[#{@options[:dn_header]}]" if $LOG
             raise "#request_phase Error: No DN provided for UID"
           else
