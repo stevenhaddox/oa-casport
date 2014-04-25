@@ -40,11 +40,11 @@ module OmniAuth
 
       CASPORT_DEFAULTS = {
         :dn => nil,
-        :full_name => nil,
-        :last_name => nil,
+        :fullName => nil,
+        :lastName => nil,
         :uid => nil,
-        :first_name => "",
-        :display_name => "",
+        :firstName => "",
+        :displayName => "",
         :title => "",
         :email => "",
         :employee_id => "",
@@ -79,10 +79,11 @@ module OmniAuth
         user_obj = get_user
 
         $LOG.debug "#auth_hash OUT" if $LOG
+        username = user_obj['firstName']+" "+user_obj['lastName']
         OmniAuth::Utils.deep_merge(super, {
           'uid' => user_obj[@options[:uid_field]],
           'info' => {
-            'name' => user_obj['full_name'],
+            'name' => username,
             'email' => user_obj['email']
           },
           'extra'     => {'user_hash' => user_obj}
