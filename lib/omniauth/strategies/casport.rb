@@ -26,7 +26,7 @@ module OmniAuth
       include OmniAuth::Strategy
 
       option :uid_field, 'dn'
-      option :setup, true
+      option :setup, false
       option :cas_server, 'http://default_setting_changeme.casport.dev'
       option :ssl_ca_file, nil
       option :pem_cert, 'default_path_changeme/path/to/cert.pem'
