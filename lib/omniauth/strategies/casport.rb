@@ -1,7 +1,9 @@
 require 'omniauth'
 require 'uri'
 require 'yaml'
-require 'httparty'
+require 'json'
+require 'multi_xml'
+require 'net/http'
 
 module OmniAuth
   module Strategies
@@ -16,11 +18,12 @@ module OmniAuth
     #
     #  use OmniAuth::Strategies::Casport, {
     #    :cas_server    => 'http://cas.slkdemos.com/users/',
-    #    :format        => 'json', 'xml', 'html', etc. || Defaults to 'xml'
-    #    :format_header => 'application/json', 'application/xml' || Defaults to 'application/xml'
+    #    :format        => 'json', 'xml', 'html', etc. || Defaults to 'json'
+    #    :format_header => 'application/json', 'application/xml' || Defaults to 'application/json'
     #    :ssl_ca_file   => 'path/to/ca_file.crt',
-    #    :pem_cert      => '/path/to/cert.pem',
-    #    :pem_cert_pass => 'keep it secret, keep it safe.',
+    #    :client_cert      => '/path/to/cert.pem',
+    #    :client_key      => '/path/to/cert.key',
+    #    :client_key_pass      => 'keep it secret, keep it safe.',
     #  }
     class Casport
       include OmniAuth::Strategy
@@ -29,11 +32,13 @@ module OmniAuth
       option :setup, false
       option :cas_server, 'http://default_setting_changeme.casport.dev'
       option :ssl_ca_file, nil
-      option :pem_cert, 'default_path_changeme/path/to/cert.pem'
-      option :pem_cert_pass, nil
+      option :client_cert, 'default_path_changeme/path/to/cert.cer'
+      option :client_key, 'default_path_changeme/path/to/cert.key'
+      option :client_key_pass, nil
       option :format_header, 'application/json'
       option :format, 'json'
       option :dn_header, 'HTTP_SSL_CLIENT_S_DN'
+      option :ssl_version, :SSLv3
       option :debug, nil
       option :log_file, nil
       option :fake_dn, nil
@@ -61,10 +66,6 @@ module OmniAuth
           $LOG ||= Logger.new(@options[:log_file])
         end
         $LOG.debug "#request_phase IN, user_uid: '#{@user_uid}', reqenv: #{request.env[@options[:dn_header]]}" if $LOG
-
-        # Setup HTTParty
-        $LOG.debug "Setting up HTTParty" if $LOG
-        CasportHTTParty.setup_httparty @options
 
         # Call to fill the user object
         get_user
@@ -123,41 +124,73 @@ module OmniAuth
           # Join our array of DN elements back together with a comma as expected by CASPORT
           @user_uid = @user_uid.join(',')
         end
-        url = URI.escape("#{@options[:cas_server]}/#{@user_uid}")
+        url = URI(URI.escape("#{@options[:cas_server]}/#{@user_uid}"))
         puts "#get_user Requesting URI: #{url}"
         $LOG.debug "#get_user Requesting URI: #{url}" if $LOG
-        response = CasportHTTParty.get(url)
-        if response.success?
-          $LOG.debug "#get_user Response:  Success!" if $LOG
-          $LOG.debug "#get_user response contents: #{response}" if $LOG
+        response = call_casport (url)
+        case response
+        when Net::HTTPSuccess then
+          $LOG.debug "#get_user response contents: #{response.inspect}" if $LOG
+          case @options[:format]
+          when 'json' then
+            @user = JSON.parse(response.body)
+          when 'xml' then
+            @user = MultiXml.parse(response.body)
+          else
+            @user = response.body
+          end
+          $LOG.debug "#get_user Parsed user: #{@user.inspect}" if $LOG
           $LOG.debug "#get_user OUT" if $LOG
-          @user = response.parsed_response
+          @user
         else
-          $LOG.error "#get_user Response: failure." if $LOG
+          $LOG.error "#get_user Response: failure. Response was: #{response.inspect}" if $LOG
           @user = nil
+          @user
         end
       end
-    end
 
-    #Helper class to setup HTTParty, as OmniAuth 1.0+ seems to conflict with HTTParty.
-    class CasportHTTParty
-      include HTTParty
+      protected
 
-      def self.setup_httparty(options)
-        options[:format]        ||= 'json'
-        options[:format_header] ||= 'application/json'
+      def call_casport (url)
+          req = Net::HTTP::Get.new(url.request_uri, http_headers)
+          res = https.start { https.request(req) }
+          res
+      end
 
-        headers 'Accept'       => options[:format_header]
-        headers 'Content-Type' => options[:format_header]
-        headers 'X-XSRF-UseProtection' => 'false' if options[:format_header]
-        if options[:ssl_ca_file]
-          ssl_ca_file options[:ssl_ca_file]
-          if options[:pem_cert_pass]
-            pem File.read(options[:pem_cert]), options[:pem_cert_pass]
+      def http_headers
+        if @http_headers
+          @http_headers
+        else
+          @http_headers = {
+            'Accept' => @options[:format_header],
+            'Content-Type' => @options[:format_header],
+            'X-XSRF-UseProtection' => ('false' if @options[:format_header]),
+            'user-agent' => "net/http #{RUBY_VERSION}"
+          }
+        end
+      end
+
+      def https
+        if @https
+          @https
+        else
+          uri = URI.parse(@options[:cas_server])
+          @https = Net::HTTP.new(uri.host, uri.port)
+          @https.use_ssl = true
+          @https.verify_mode = OpenSSL::SSL::VERIFY_PEER
+          @https.ssl_version = @options[:ssl_version] || :SSLv3
+
+          @https.ca_file = @options[:ssl_ca_file]
+          @https.ssl_timeout = 120 # seconds
+          @https.verify_depth = 5 # max length of cert chain to be verified
+          @https.cert = OpenSSL::X509::Certificate.new(File.read(@options[:client_cert]))
+          if @options[:client_key_pass].nil?
+            @https.key = OpenSSL::PKey::RSA.new(File.read(@options[:client_key]))
           else
-            pem File.read(options[:pem_cert])
+            @https.key = OpenSSL::PKey::RSA.new(File.read(@options[:client_key]), @options[:client_key_pass])
           end
         end
+        @https
       end
     end
 
