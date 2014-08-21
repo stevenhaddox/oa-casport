@@ -38,6 +38,7 @@ module OmniAuth
       option :format_header, 'application/json'
       option :format, 'json'
       option :dn_header, 'HTTP_SSL_CLIENT_S_DN'
+      option :issuer_dn_header, 'HTTP_SSL_CLIENT_I_DN'
       option :ssl_version, :SSLv3
       option :debug, nil
       option :log_file, nil
@@ -115,16 +116,12 @@ module OmniAuth
             end
           end
         end
-        # Fix DN order (if we have a DN) for CASPORT to work properly
-        if @user_uid.include?('/') or @user_uid.include?(',')
-          # Convert '/' to ',' and split on ','
-          @user_uid = @user_uid.gsub('/',',').split(',').reject{|array| array.empty? }
-          # See if the DN is in the order CASPORT expects (and fix it if needed)
-          @user_uid = @user_uid.reverse if @user_uid.first.downcase.include? 'c='
-          # Join our array of DN elements back together with a comma as expected by CASPORT
-          @user_uid = @user_uid.join(',')
-        end
-        url = URI(URI.escape("#{@options[:cas_server]}/#{@user_uid}"))
+        @user_uid = split_reverse_dn(@user_uid)
+        @user_issuer_dn = split_reverse_dn(request.env[@options[:issuer_dn_header]])
+
+        url_text = "#{@options[:cas_server]}/#{@user_uid}"
+        url_text += "?issuerDn=#{@user_issuer_dn}" unless @user_issuer_dn.nil?
+        url = URI(URI.escape("url_text"))
         puts "#get_user Requesting URI: #{url}"
         $LOG.debug "#get_user Requesting URI: #{url}" if $LOG
         response = call_casport (url)
@@ -150,6 +147,18 @@ module OmniAuth
       end
 
       protected
+
+      def split_reverse_dn (dn)
+        if !dn.nil? and (dn.include?('/') or dn.include?(','))
+          # Convert '/' to ',' and split on ','
+          dn = dn.gsub('/',',').split(',').reject{|array| array.empty? }
+          # See if the DN is in the order CASPORT expects (and fix it if needed)
+          dn = dn.reverse if dn.first.downcase.include? 'c='
+          # Join our array of DN elements back together with a comma as expected by CASPORT
+          dn = dn.join(',')
+        end
+        dn
+      end
 
       def call_casport (url)
           req = Net::HTTP::Get.new(url.request_uri, http_headers)
