@@ -121,7 +121,7 @@ module OmniAuth
 
         url_text = "#{@options[:cas_server]}/#{@user_uid}"
         url_text += "?issuerDn=#{@user_issuer_dn}" unless @user_issuer_dn.nil?
-        url = URI(URI.escape("url_text"))
+        url = URI(URI.escape(url_text))
         puts "#get_user Requesting URI: #{url}"
         $LOG.debug "#get_user Requesting URI: #{url}" if $LOG
         response = call_casport (url)
