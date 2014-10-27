@@ -81,7 +81,7 @@ module OmniAuth
         user_obj = get_user
 
         $LOG.debug "#auth_hash OUT" if $LOG
-        username = user_obj['firstName']+" "+user_obj['lastName']
+        username = "#{user_obj['firstName'] or 'NOFIRSTNAME'} #{user_obj['lastName'] or 'NOLASTNAME'}"
         OmniAuth::Utils.deep_merge(super, {
           'uid' => user_obj[@options[:uid_field]],
           'info' => {
