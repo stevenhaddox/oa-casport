@@ -1,3 +1,7 @@
+[![Gem Version](https://badge.fury.io/rb/oa-casport.svg)](http://badge.fury.io/rb/oa-casport)
+[![Build Status](https://travis-ci.org/stevenhaddox/oa-casport.svg)](https://travis-ci.org/stevenhaddox/oa-casport)
+[![Code Climate](https://codeclimate.com/github/stevenhaddox/oa-casport/badges/gpa.svg)](https://codeclimate.com/github/stevenhaddox/oa-casport)
+
 # oa-casport
 
 The goal of this gem is to allow CASPORT integartion with your rack-based application easily through OmniAuth.
